@@ -1,5 +1,6 @@
 import os
 import visa
+import re
 
 from flask import Flask, request
 
@@ -17,7 +18,6 @@ class Instrument(object):
     def connect(self, ip):
         self.ip = ip
         resourceName = "TCPIP::" + self.ip + "::INSTR"
-        print(resourceName)
         self.instrument = self.rm.open_resource(resourceName)
 
     # sends a command to the instrument
@@ -46,11 +46,28 @@ class Instrument(object):
 def createCommandDict():
     commands = dict()
 
+    commands['getDisplayState'] = 'DISPLAY?'
+
     # Channel state
-    commands['channel state'] = 'DISplay:GLObal:CH$1:STATE$2'
+    commands['setChannelState'] = 'DISplay:GLObal:CH$ch_num$:STATE $state$'
+    commands['getChannelState'] = 'DISplay:GLObal:CH$ch_num$:STATE?'
 
     return commands
 
+# Takes the given command and params, and gets it ready to be sent to the scope
+def parseCommand(command, params):
+    # m = re.search(r'\$(.+?)\$', command)
+    # m.
+    pattern = re.compile(r'\$(.+?)\$')
+    tokens = re.findall(pattern, command)
+
+    # for every token in the command, replace it with the value from the params
+    for token in tokens:
+        tokenWithDelimiters = "$" + token + "$"
+        if token in params:
+            command = command.replace(tokenWithDelimiters, params[token])
+
+    return command
 
 def create_app(test_config=None):
     # create and configure the app
@@ -80,6 +97,8 @@ def create_app(test_config=None):
             if ('ip' in request.form):
                 # connect to the scope
                 my_instrument.connect(request.form['ip'])
+                respone = "connected"
+                print("yippie")
             else:
                 response = "You must supply the parameter ip, with the ip of the scope"
 
@@ -89,36 +108,29 @@ def create_app(test_config=None):
     @app.route('/command', methods=['GET', 'POST'])
     def command():
         response = ""
-        if request.method == 'POST':
-            print(request.form)
-            # return request.form
-            # response = my_instrument.sendCommand(
-            #     'DISplay:GLObal:CH2:STATE OFF')
-            if 'command' in request.form:
-                # Map the REST command to a PI command
-                restCommand = request.form['command']
-                if restCommand in commands:
-                    piCommand = commands[restCommand]
-                    print(piCommand)
-                    response = piCommand
+        # print(request.form)
+        # return request.form
+        # response = my_instrument.sendCommand(
+        #     'DISplay:GLObal:CH2:STATE OFF')
+        if 'command' in request.form:
+            # Map the REST command to a PI command
+            restCommand = request.form['command']
+            if restCommand in commands:
+                piCommand = commands[restCommand]
+                # print(piCommand)
+                # Replace the tokens in the command with the parameters supplied in the request
+                parsedCommand = parseCommand(piCommand, request.form)
+                print(parsedCommand);
+                response = my_instrument.sendCommand(parsedCommand)
+                # response = piCommand
 
-                # Invalid command given
-                else:
-                    response = "command not found"
-                # response = my_instrument.sendCommand(request.form['command'])
+            # Invalid command given
             else:
-                response = "You must supply the parameter 'command', with the command to send"
+                response = "command not found"
         else:
-            response = "use post"
+            response = "You must supply the parameter 'command', with the command to send"
 
         return response
 
-    # Used to test connectivity from app.
-    @app.route('/test', methods=['GET', 'POST'])
-    def test():
-        if request.method == 'POST':
-            return request.form
-        else:
-            return "GET"
 
     return app
