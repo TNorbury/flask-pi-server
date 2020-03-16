@@ -14,13 +14,17 @@ class Instrument(object):
         self.ip = ""
         self.rm = visa.ResourceManager()
 
+    #
     # Connect to the scope at the given IP
+    #
     def connect(self, ip):
         self.ip = ip
         resourceName = "TCPIP::" + self.ip + "::INSTR"
         self.instrument = self.rm.open_resource(resourceName)
 
+    #
     # sends a command to the instrument
+    #
     def sendCommand(self, command):
         if (self.instrument != None):
             try:
@@ -54,7 +58,10 @@ def createCommandDict():
 
     return commands
 
+
+#
 # Takes the given command and params, and gets it ready to be sent to the scope
+#
 def parseCommand(command, params):
     # m = re.search(r'\$(.+?)\$', command)
     # m.
@@ -64,11 +71,17 @@ def parseCommand(command, params):
     # for every token in the command, replace it with the value from the params
     for token in tokens:
         tokenWithDelimiters = "$" + token + "$"
+        
+        # Make sure that the param was supplied in the request
         if token in params:
             command = command.replace(tokenWithDelimiters, params[token])
 
     return command
 
+
+#
+#  Starts the server and defines the different routes
+#
 def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__, instance_relative_config=True)
@@ -80,12 +93,6 @@ def create_app(test_config=None):
     # a simple page that says hello
     @app.route('/hello')
     def hello():
-
-        # TCPIP::10.233.69.194::port::SOCKET
-        # TCPIP::10.233.69.194::INSTR
-        # print(my_instrument.query('*IDN?'))
-        # print("hello world!")
-        # my_instrument.query('DISplay:GLObal:CH2:STATE OFF')
         return "hello"
 
     # Connects to a scope
@@ -108,21 +115,16 @@ def create_app(test_config=None):
     @app.route('/command', methods=['GET', 'POST'])
     def command():
         response = ""
-        # print(request.form)
-        # return request.form
-        # response = my_instrument.sendCommand(
-        #     'DISplay:GLObal:CH2:STATE OFF')
         if 'command' in request.form:
             # Map the REST command to a PI command
             restCommand = request.form['command']
             if restCommand in commands:
                 piCommand = commands[restCommand]
-                # print(piCommand)
+
                 # Replace the tokens in the command with the parameters supplied in the request
                 parsedCommand = parseCommand(piCommand, request.form)
-                print(parsedCommand);
+                print(parsedCommand)
                 response = my_instrument.sendCommand(parsedCommand)
-                # response = piCommand
 
             # Invalid command given
             else:
@@ -131,6 +133,5 @@ def create_app(test_config=None):
             response = "You must supply the parameter 'command', with the command to send"
 
         return response
-
 
     return app
